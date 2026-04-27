@@ -116,7 +116,6 @@ public:
 
                         // For corner moves both adjacent blocks must be free
                         if (dx != 0 && dy != 0) {
-                            continue;
                             if (occupancyMatrix(block.x + dx, block.y).isOccupied() || occupancyMatrix(block.x, block.y + dy).isOccupied()) {
                                 continue; // Skip diagonal moves
                             }
@@ -211,7 +210,7 @@ public:
 
 private:
 sf::Vector2i worldSize;
-sf::Vector2i blockSize = { 50, 50 };
+sf::Vector2i blockSize = { 25, 25 };
 
 // Use 2d matrix to track which blocks are occupied (wall)
 Matrix<Block> occupancyMatrix;

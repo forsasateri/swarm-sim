@@ -1,6 +1,7 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <iostream>
+#include <optional>
 
 #include "randomWalker.cc"
 #include "world/world.hpp"
@@ -30,6 +31,8 @@ int main()
 {
 
 	sf::Vector2i windowSize = { 1000, 500 };
+	int blockSize = 25;
+	sf::Vector2i worldSize = { windowSize.x/blockSize, windowSize.y/blockSize }; // Size in blocks
 
 	sf::RenderWindow window( sf::VideoMode( 
 		{ (unsigned int)windowSize.x, 
@@ -52,11 +55,11 @@ int main()
 
 	std::vector<RandomWalker> walkers;
 
-	int colorStep = 150;
+	int colorStep = 250;
 	for (int a = 0; a < 255; a += colorStep) {
 		for (int b = 0; b < 255; b += colorStep) {
 			for (int c = 0; c < 255; c += colorStep) {
-				walkers.emplace_back( windowSize, sf::Color(a, b, c), world );
+				walkers.emplace_back( worldSize, sf::Color(a, b, c), world );
 			}
 		}
 	}
@@ -75,9 +78,18 @@ int main()
 			if ( event->is<sf::Event::Closed>() ) {
 				window.close();
 				// window.setPosition({0, 0});
-			} else if ( event->is<sf::Event::MouseButtonPressed>() ) {
-				sf::Vector2i mousePos = sf::Mouse::getPosition( window );
-				world.handleClick( mousePos );
+
+			} else if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+				if (mouseButtonPressed->button == sf::Mouse::Button::Right)
+				{
+					sf::Vector2i mousePos = sf::Mouse::getPosition( window );
+					world.handleClick( mousePos );
+				} else if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+					sf::Vector2i mousePos = sf::Mouse::getPosition( window );
+					for (auto& w : walkers) {
+						w.setTargetFromUSerInput(mousePos);
+					}
+				}
 			}
 		}
 

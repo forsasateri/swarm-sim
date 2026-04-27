@@ -5,10 +5,11 @@
 #include "random.cc"
 
 #include "world/world.hpp"
+#include "world_model.hpp"
 
 class RandomWalker {
 public:
-    RandomWalker(sf::Vector2i worldSize, sf::Color color, World& world) : world(world) {
+    RandomWalker(sf::Vector2i worldSize, sf::Color color, World& world) : world(world), worldModel(worldSize) {
         this->worldSize = worldSize;
         this->color = color;
         position = { 0.f, 0.f };
@@ -19,6 +20,9 @@ public:
 
     void step(float deltaTime)
     {
+
+        observeWorld();
+
         // If route is empty, set new target and calculate route
         if (currentRoute.empty()) {
             setNewTarget();
@@ -70,22 +74,24 @@ public:
         }
     }
 
-    void display(sf::RenderWindow& window)
-    {
-        sf::RectangleShape  shape({size, size});
-        shape.setFillColor( color );
-        shape.setPosition( position );
-        shape.setOrigin( { size, size } ); // Center the shape
-        
-        // sf::RectangleShape targetShape({5.f, 5.f});
-        // targetShape.setFillColor( color );
-        // targetShape.setOutlineColor( sf::Color::Red );
-        // targetShape.setOutlineThickness( 2.f );
-        // targetShape.setPosition( target );
-        // targetShape.setOrigin( { 5.f, 5.f } ); // Center the target shape
-        
-        window.draw( shape );
-        // window.draw( targetShape );
+
+    void observeWorld() {
+        // worldModel.clear(5); // Clear any data older than 5 seconds
+
+        // For each block in range, update the world model with the current state of the block
+        float observationRange = 100.f;
+        std::vector<sf::Vector2i> blocksInRange = world.getBlocksInRange(position, observationRange);
+
+        for (const auto& block : blocksInRange) {
+            bool occupied = world.isOccupied(world.getBlockCenter(block));
+            worldModel.update(block, occupied ? BlockState::Occupied : BlockState::Empty);
+        }
+    }
+
+
+    void setTargetFromUSerInput(sf::Vector2i mousePos) {
+        target = world.getBlockCenter(world.getBlock({ mousePos.x, mousePos.y }));
+        calculateRoute();
     }
 
 
@@ -136,14 +142,17 @@ private:
     World& world;
     std::vector<sf::Vector2i> currentRoute;
 
+    WorldModel worldModel;
+
     void setNewTarget() {
         Random rand;
-        target.x = rand.random(0.f, (float)worldSize.x);
-        target.y = rand.random(0.f, (float)worldSize.y);
+        int randX = rand.random(0, worldSize.x);
+        int randY = rand.random(0, worldSize.y);
+        target = world.getBlockCenter({ (int)randX, (int)randY });
     }
 
 
     void calculateRoute() {
-        currentRoute = world.calculatePath(position, target);
+        currentRoute = worldModel.calculatePath(world.getBlock(position), world.getBlock(target));
     }
 };
