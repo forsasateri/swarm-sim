@@ -1,0 +1,240 @@
+#ifndef WORLD_HPP
+#define WORLD_HPP
+
+#include <SFML/Graphics.hpp>
+#include <vector>
+#include <set>
+#include <queue>
+#include <map>
+#include <algorithm>
+
+#include "util/matrix.hpp"
+#include "block.hpp"
+
+// Extend Vector2i for use in std::map and std::set
+namespace std {
+    template <>
+    struct less<sf::Vector2i> {
+        bool operator()(const sf::Vector2i& a, const sf::Vector2i& b) const {
+            return std::tie(a.x, a.y) < std::tie(b.x, b.y);
+        }
+    };
+}
+
+
+class World {
+
+public:
+    World(sf::Vector2i size) : worldSize(size), occupancyMatrix(size.x / blockSize.x, size.y / blockSize.y) {
+        // occupancyMatrix = Matrix<bool>( worldSize.x / blockSize.x, worldSize.y / blockSize.y );
+        buildGridLines();
+    }
+
+    void display(sf::RenderWindow& window) {
+        // Draw grid lines
+        window.draw(gridLines);
+
+        // Draw occupied blocks
+        for (int x = 0; x < occupancyMatrix.getWidth(); x++) {
+            for (int y = 0; y < occupancyMatrix.getHeight(); y++) {
+                if (occupancyMatrix(x, y).isOccupied()) {
+                    
+                    sf::RectangleShape blockShape({ (float)blockSize.x, (float)blockSize.y });
+                    blockShape.setPosition({x * blockSize.x, y * blockSize.y});
+                    blockShape.setFillColor(sf::Color::Red);
+                    window.draw(blockShape);
+                }
+            }
+        }
+    }
+
+    void handleClick(sf::Vector2i mousePos) {
+        int blockX = mousePos.x / blockSize.x;
+        int blockY = mousePos.y / blockSize.y;
+
+        occupancyMatrix(blockX, blockY).toggle();
+    }
+
+
+    bool isOccupied(sf::Vector2f position) {
+        sf::Vector2i blockPos = getBlock(position);
+        int blockX = blockPos.x;
+        int blockY = blockPos.y;
+
+        if (blockX < 0 || blockX >= occupancyMatrix.getWidth() || blockY < 0 || blockY >= occupancyMatrix.getHeight()) {
+            return true; // Treat out-of-bounds as occupied
+        }
+
+        return occupancyMatrix(blockX, blockY).isOccupied();
+    }
+
+    sf::Vector2i getBlock(sf::Vector2f position) {
+        int blockX = position.x / blockSize.x;
+        int blockY = position.y / blockSize.y;
+        return { blockX, blockY };
+    }
+
+    std::vector<sf::Vector2i> getBlocksInRange(sf::Vector2f position, float range) {
+        std::vector<sf::Vector2i> blocksInRange;
+
+        int minBlockX = std::max(0, (int)((position.x - range) / blockSize.x));
+        int maxBlockX = std::min((int)occupancyMatrix.getWidth() - 1, (int)((position.x + range) / blockSize.x));
+        int minBlockY = std::max(0, (int)((position.y - range) / blockSize.y));
+        int maxBlockY = std::min((int)occupancyMatrix.getHeight() - 1, (int)((position.y + range) / blockSize.y));
+
+        for (int x = minBlockX; x <= maxBlockX; x++) {
+            for (int y = minBlockY; y <= maxBlockY; y++) {
+                blocksInRange.push_back({ x, y });
+            }
+        }
+
+        return blocksInRange;
+    }
+
+
+    sf::Vector2f getBlockCenter(sf::Vector2i block) {
+        return sf::Vector2f(block.x * blockSize.x + blockSize.x / 2.f, block.y * blockSize.y + blockSize.y / 2.f);
+    }
+
+
+    std::vector<sf::Vector2i> getNeighbours(sf::Vector2i block) {
+        std::vector<sf::Vector2i> neighbours{};
+
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue; // Skip the current block
+
+                int neighbourX = block.x + dx;
+                int neighbourY = block.y + dy;
+
+                if (neighbourX >= 0 && neighbourX < occupancyMatrix.getWidth() &&
+                    neighbourY >= 0 && neighbourY < occupancyMatrix.getHeight()) {
+                        
+                        if (occupancyMatrix(neighbourX, neighbourY).isOccupied()) {
+                            continue; // Skip occupied blocks
+                        }
+
+                        // For corner moves both adjacent blocks must be free
+                        if (dx != 0 && dy != 0) {
+                            continue;
+                            if (occupancyMatrix(block.x + dx, block.y).isOccupied() || occupancyMatrix(block.x, block.y + dy).isOccupied()) {
+                                continue; // Skip diagonal moves
+                            }
+                        }
+                        neighbours.push_back({ neighbourX, neighbourY });
+                }
+            }
+        }
+
+        return neighbours;
+    }
+
+    // PATHFINDING STUFF
+
+    struct Node {
+        sf::Vector2i pos;
+        int fCost;
+
+        // Priority queue needs to pick the SMALLEST fCost
+        bool operator>(const Node& other) const {
+            return fCost > other.fCost;
+        }
+    };
+
+    // Manhattan distance heuristic
+    int heuristic(sf::Vector2i a, sf::Vector2i b) {
+        return std::abs(a.x - b.x) + std::abs(a.y - b.y);
+    }
+
+
+    std::vector<sf::Vector2i> calculatePath(sf::Vector2f start, sf::Vector2f end) {
+        sf::Vector2i startBlock = getBlock(start);
+        sf::Vector2i targetBlock = getBlock(end);
+
+        // Frontier: Nodes we need to visit, sorted by lowest F-cost
+        std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openSet;
+        openSet.push({startBlock, 0});
+
+        // Tracking costs and parentage
+        std::map<sf::Vector2i, sf::Vector2i> cameFrom;
+        std::map<sf::Vector2i, int> gCost;
+
+        gCost[startBlock] = 0;
+
+        while (!openSet.empty()) {
+            sf::Vector2i current = openSet.top().pos;
+            openSet.pop();
+
+            // Goal reached!
+            if (current == targetBlock) {
+                std::vector<sf::Vector2i> path;
+                while (current != startBlock) {
+                    path.push_back(current);
+                    current = cameFrom[current];
+                }
+                std::reverse(path.begin(), path.end());
+                return path;
+            }
+
+            for (sf::Vector2i neighbor : getNeighbours(current)) {
+                int newGCost = gCost[current] + 1; // Assuming move cost of 1
+
+                if (gCost.find(neighbor) == gCost.end() || newGCost < gCost[neighbor]) {
+                    gCost[neighbor] = newGCost;
+                    int fCost = newGCost + heuristic(neighbor, targetBlock);
+                    openSet.push({neighbor, fCost});
+                    cameFrom[neighbor] = current;
+                }
+            }
+        }
+
+        return {}; // Return empty if no path found
+    }
+
+
+    // std::vector<sf::Vector2i> calculatePath(sf::Vector2f start, sf::Vector2f end) {        
+    //     std::vector<sf::Vector2i> path;
+
+    //     sf::Vector2i current = getBlock(start);
+    //     sf::Vector2i target = getBlock(end);
+    //     path.push_back(current);
+
+    //     // Find path
+    //     while(current != target) {
+    //         std::vector<sf::Vector2i> neighbours = getNeighbours(current);
+            
+    //     }
+
+    //     return path;
+    // }
+
+
+private:
+sf::Vector2i worldSize;
+sf::Vector2i blockSize = { 50, 50 };
+
+// Use 2d matrix to track which blocks are occupied (wall)
+Matrix<Block> occupancyMatrix;
+
+sf::Color gridColor = sf::Color::White;
+sf::VertexArray gridLines;
+
+
+void buildGridLines() {
+    gridLines.clear();
+    gridLines.setPrimitiveType(sf::PrimitiveType::Lines);
+    
+    for (float x = 0; x < worldSize.x; x += blockSize.x) {
+        gridLines.append(sf::Vertex{{ x, 0 }, gridColor });
+        gridLines.append(sf::Vertex{{ x, worldSize.y }, gridColor});
+    }
+    for (float y = 0; y < worldSize.y; y += blockSize.y) {
+        gridLines.append(sf::Vertex{{ 0, y }, gridColor });
+        gridLines.append(sf::Vertex{{ worldSize.x, y }, gridColor});
+    }
+}
+
+};
+
+
+#endif // WORLD_HPP
