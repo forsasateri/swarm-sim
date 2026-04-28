@@ -47,7 +47,7 @@ public:
         //         currentSpeed = maxSpeed;
         //     }
         // }
-        currentSpeed = 100.f; // Set a constant speed for now
+        currentSpeed = 250.f; // Set a constant speed for now
         
         if (length > 3) {
             direction /= length; // Normalize the direction

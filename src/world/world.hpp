@@ -128,84 +128,53 @@ public:
         return neighbours;
     }
 
-    // PATHFINDING STUFF
-
-    struct Node {
-        sf::Vector2i pos;
-        int fCost;
-
-        // Priority queue needs to pick the SMALLEST fCost
-        bool operator>(const Node& other) const {
-            return fCost > other.fCost;
-        }
-    };
-
-    // Manhattan distance heuristic
-    int heuristic(sf::Vector2i a, sf::Vector2i b) {
-        return std::abs(a.x - b.x) + std::abs(a.y - b.y);
-    }
 
 
-    std::vector<sf::Vector2i> calculatePath(sf::Vector2f start, sf::Vector2f end) {
-        sf::Vector2i startBlock = getBlock(start);
-        sf::Vector2i targetBlock = getBlock(end);
+    void newRandomWalls() {
+        Random random;
+        int number_horizontal_walls = random.random(7, 20);
+        int number_vertical_walls = random.random(10, 25);
 
-        // Frontier: Nodes we need to visit, sorted by lowest F-cost
-        std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openSet;
-        openSet.push({startBlock, 0});
-
-        // Tracking costs and parentage
-        std::map<sf::Vector2i, sf::Vector2i> cameFrom;
-        std::map<sf::Vector2i, int> gCost;
-
-        gCost[startBlock] = 0;
-
-        while (!openSet.empty()) {
-            sf::Vector2i current = openSet.top().pos;
-            openSet.pop();
-
-            // Goal reached!
-            if (current == targetBlock) {
-                std::vector<sf::Vector2i> path;
-                while (current != startBlock) {
-                    path.push_back(current);
-                    current = cameFrom[current];
-                }
-                std::reverse(path.begin(), path.end());
-                return path;
-            }
-
-            for (sf::Vector2i neighbor : getNeighbours(current)) {
-                int newGCost = gCost[current] + 1; // Assuming move cost of 1
-
-                if (gCost.find(neighbor) == gCost.end() || newGCost < gCost[neighbor]) {
-                    gCost[neighbor] = newGCost;
-                    int fCost = newGCost + heuristic(neighbor, targetBlock);
-                    openSet.push({neighbor, fCost});
-                    cameFrom[neighbor] = current;
-                }
+        // Remove all current walls
+        for (int x = 0; x < occupancyMatrix.getWidth(); x++) {
+            for (int y = 0; y < occupancyMatrix.getHeight(); y++) {
+                occupancyMatrix(x, y).set(BlockType::Empty);
             }
         }
 
-        return {}; // Return empty if no path found
+        for (int i = 0; i < number_horizontal_walls; i++) {
+
+            int wall_y = random.random(0, occupancyMatrix.getHeight() - 1);
+            int wall_start_x = random.random(0, occupancyMatrix.getWidth() - 1);
+            int wall_length = random.random(1, occupancyMatrix.getWidth() / 2);
+
+            // Cap wall length to prevent out of bounds
+            if (wall_start_x + wall_length >= occupancyMatrix.getWidth()) {
+                wall_length = occupancyMatrix.getWidth() - wall_start_x - 1;
+            }
+
+            for (int x = wall_start_x; x < wall_start_x + wall_length && x < occupancyMatrix.getWidth(); x++) {
+                occupancyMatrix(x, wall_y).set(BlockType::Occupied);
+            }
+        }
+
+        for (int i = 0; i < number_vertical_walls; i++) {
+
+            int wall_x = random.random(0, occupancyMatrix.getWidth() - 1);
+            int wall_start_y = random.random(0, occupancyMatrix.getHeight() - 1);
+            int wall_length = random.random(1, occupancyMatrix.getHeight() / 2);
+
+            // Cap wall length to prevent out of bounds
+            if (wall_start_y + wall_length >= occupancyMatrix.getHeight()) {
+                wall_length = occupancyMatrix.getHeight() - wall_start_y - 1;
+            }
+
+            for (int y = wall_start_y; y < wall_start_y + wall_length && y < occupancyMatrix.getHeight(); y++) {
+                occupancyMatrix(wall_x, y).set(BlockType::Occupied);
+            }
+        }
+
     }
-
-
-    // std::vector<sf::Vector2i> calculatePath(sf::Vector2f start, sf::Vector2f end) {        
-    //     std::vector<sf::Vector2i> path;
-
-    //     sf::Vector2i current = getBlock(start);
-    //     sf::Vector2i target = getBlock(end);
-    //     path.push_back(current);
-
-    //     // Find path
-    //     while(current != target) {
-    //         std::vector<sf::Vector2i> neighbours = getNeighbours(current);
-            
-    //     }
-
-    //     return path;
-    // }
 
 
 private:

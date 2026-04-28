@@ -18,6 +18,11 @@ enum class BlockState {
     Occupied
 };
 
+const int BASE_STALENESS_THRESHOLD_MS = 5000; // Base staleness threshold in milliseconds
+const int STALENESS_INCREMENT_PER_CONFIRMATION_MS = 3000; // Additional staleness time added per confirmation
+const int MAX_STALENESS_THRESHOLD_MS = 30000; // Maximum staleness threshold to prevent infinite belief
+const int OBSERVATION_CONFIRMATION_INTERVAL_MS = 500; // Time interval to confirm observations
+
 class WorldModelBlock {
 public:
     WorldModelBlock() : m_state(BlockState::Unknown) {}
@@ -32,38 +37,39 @@ public:
 
     void update(BlockState newState) {
 
-        TimePoint previus_update_time = m_last_updated;
-        m_last_updated = Clock::now();
+        if (newState != m_state) {
 
-        // If same state then belief is reinforced
-        if (newState == m_state) {
+            m_state = newState;
+            m_last_updated = Clock::now();
+            m_last_observed = Clock::now();
+            m_times_confirmed = 0;
 
-            // Needs to be at least 3 sec since last confirm to reinforce
-            auto time_since_last_update = std::chrono::duration_cast<std::chrono::milliseconds>(
-                Clock::now() - previus_update_time
-            ).count();
-            
-            if (time_since_last_update > 500) {
-                m_times_confirmed++;
-            } else {
-                return;
-            }
         } else {
-            m_times_confirmed = 0; // Reset confirmation count if state changes
-        }
 
-        m_state = newState;
+            auto time_since_last_observed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                Clock::now() - m_last_observed
+            ).count();
+
+            if (time_since_last_observed > OBSERVATION_CONFIRMATION_INTERVAL_MS) {
+
+                m_last_observed = Clock::now();
+                m_times_confirmed++;
+ 
+            }
+        }
     }
 
     bool isStale() const {
-        auto age = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - m_last_updated).count();
-        int stalenessThreshold = 10000 + (m_times_confirmed * 5000);
+        auto age = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - m_last_observed).count();
+        int stalenessThreshold = BASE_STALENESS_THRESHOLD_MS + (m_times_confirmed * STALENESS_INCREMENT_PER_CONFIRMATION_MS);
+        stalenessThreshold = std::min(stalenessThreshold, MAX_STALENESS_THRESHOLD_MS); // Cap the staleness threshold
         return age > stalenessThreshold;
     }
 
 private:
     BlockState m_state;
-    TimePoint m_last_updated;
+    TimePoint m_last_updated; // When last teh actual state changed
+    TimePoint m_last_observed; // When was this block last observed (for staleness)
     unsigned int m_times_confirmed = 0; // How many times has this block been observed as the same state (for belief reinforcement)
 };
 

@@ -30,7 +30,7 @@ const float TICK_DURATION = 1.f / TICK_RATE; // Duration of each tick
 int main()
 {
 
-	sf::Vector2i windowSize = { 1000, 500 };
+	sf::Vector2i windowSize = { 2000, 1000 };
 	int blockSize = 25;
 	sf::Vector2i worldSize = { windowSize.x/blockSize, windowSize.y/blockSize }; // Size in blocks
 
@@ -55,7 +55,7 @@ int main()
 
 	std::vector<RandomWalker> walkers;
 
-	int colorStep = 250;
+	int colorStep = 75;
 	for (int a = 0; a < 255; a += colorStep) {
 		for (int b = 0; b < 255; b += colorStep) {
 			for (int c = 0; c < 255; c += colorStep) {
@@ -89,6 +89,10 @@ int main()
 					for (auto& w : walkers) {
 						w.setTargetFromUSerInput(mousePos);
 					}
+				}
+			} else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+				if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
+					world.newRandomWalls();
 				}
 			}
 		}

@@ -28,6 +28,10 @@ public:
         }
     }
 
+    void set(BlockType newType) {
+        type = newType;
+    }
+
     sf::Vector2i getPosition() const {
         return position;
     }

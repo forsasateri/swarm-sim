@@ -7,6 +7,7 @@
 - Fix freese from pathfinding when target is blocked - currently just instant recalculation over entire search space
     - Maybe even add some huristic for giving up?
 - Split last updated and last observed time for world model - improve staleness
+- Max staleness time to prevent infinite belief
 
 ## Other
 - Dynamic walls being added / removed
