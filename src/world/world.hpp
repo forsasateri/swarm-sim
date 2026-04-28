@@ -74,17 +74,20 @@ public:
         return { blockX, blockY };
     }
 
-    std::vector<sf::Vector2i> getBlocksInRange(sf::Vector2f position, float range) {
+    // Find all blocks in range of a position (manhattan distance)
+    std::vector<sf::Vector2i> getBlocksInRange(sf::Vector2f position, int range) {
         std::vector<sf::Vector2i> blocksInRange;
 
-        int minBlockX = std::max(0, (int)((position.x - range) / blockSize.x));
-        int maxBlockX = std::min((int)occupancyMatrix.getWidth() - 1, (int)((position.x + range) / blockSize.x));
-        int minBlockY = std::max(0, (int)((position.y - range) / blockSize.y));
-        int maxBlockY = std::min((int)occupancyMatrix.getHeight() - 1, (int)((position.y + range) / blockSize.y));
+        sf::Vector2i centerBlock = getBlock(position);
 
-        for (int x = minBlockX; x <= maxBlockX; x++) {
-            for (int y = minBlockY; y <= maxBlockY; y++) {
-                blocksInRange.push_back({ x, y });
+        for (int dx = -range; dx <= range; dx++) {
+            for (int dy = -range; dy <= range; dy++) {
+                sf::Vector2i blockPos = { centerBlock.x + dx, centerBlock.y + dy };
+
+                if (blockPos.x >= 0 && blockPos.x < occupancyMatrix.getWidth() &&
+                    blockPos.y >= 0 && blockPos.y < occupancyMatrix.getHeight()) {
+                    blocksInRange.push_back(blockPos);
+                }
             }
         }
 

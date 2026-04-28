@@ -1,77 +1,126 @@
 #include <SFML/Graphics.hpp>
 #include <cmath>
 #include <vector>
+#include <utility>
+#include <memory>
 
 #include "random.cc"
 
 #include "world/world.hpp"
 #include "world_model.hpp"
+#include "util/logger.hpp"
 
 class RandomWalker {
 public:
-    RandomWalker(sf::Vector2i worldSize, sf::Color color, World& world) : world(world), worldModel(worldSize) {
+    RandomWalker(
+        sf::Vector2i worldSize, 
+        sf::Color color, 
+        World& world,
+        std::shared_ptr<WalkerLogger> walkerLogger
+    ) : world(world),
+        logger(std::move(walkerLogger)),
+        worldModel(worldSize, logger) {
+        
         this->worldSize = worldSize;
         this->color = color;
         position = { 0.f, 0.f };
-        setNewTarget();
         currentSpeed = 0;
         maxSpeed = 1500.f;
+
+        setNewTarget();
+    }
+
+    RandomWalker(const RandomWalker&) = delete;
+    RandomWalker& operator=(const RandomWalker&) = delete;
+    RandomWalker(RandomWalker&&) noexcept = default;
+    RandomWalker& operator=(RandomWalker&&) noexcept = delete;
+
+    void updateLogic() {
+        logger->log("Updating logic");
+
+        logger->log("Observing world");
+        observeWorld();
+        logger->log("World observed");
+
+        if (isPathBlocked()) {
+            logger->log("Path is blocked, recalculating route");
+            calculateRoute();
+        }
+
+        bool reachedTarget = routeIndex >= currentRoute.size();
+        bool noValidRoute = currentRoute.empty();
+
+        int make_new_route_attempts = 0;
+        while (noValidRoute || reachedTarget) {
+
+            make_new_route_attempts++;
+            if (make_new_route_attempts > 10) {
+                logger->log("Failed to find valid route after 10 attempts, giving up");
+                exit(-1);
+            }
+
+            logger->log("No valid route or target reached, picking new target");
+            setNewTarget();
+            calculateRoute();
+
+            reachedTarget = world.getBlock(position) == world.getBlock(target);
+            noValidRoute = currentRoute.empty();
+            logger->log("Set new target and calculated route. Reached target: " + std::to_string(reachedTarget) + ", no valid route: " + std::to_string(noValidRoute));
+            logger->log("Path length: " + std::to_string(currentRoute.size()));
+        }
     }
 
     void step(float deltaTime)
     {
+        logger->log("Stepping with deltaTime: " + std::to_string(deltaTime));
+        
+        int route_length = currentRoute.size();
 
-        observeWorld();
-
-        // If route is empty, set new target and calculate route
-        if (currentRoute.empty()) {
-            setNewTarget();
-            calculateRoute();
-            return;
+        sf::Vector2i newCurrentBlock = world.getBlock(position);
+        if (newCurrentBlock != currentBlock || route_length == 0) {
+            logger->log("Entered new block: (" + std::to_string(newCurrentBlock.x) + ", " + std::to_string(newCurrentBlock.y) + ")");
+            currentBlock = newCurrentBlock;
+            updateLogic();
+            logger->log("Logic updated");
         }
 
-        sf::Vector2f nextTarget = world.getBlockCenter(currentRoute.front());
+        // if (currentRoute.empty() || routeIndex >= currentRoute.size()) {
+        //     logger->log("No active route available after logic update; skipping movement");
+        //     return;
+        // }
+
+        logger->log("Route length: " + std::to_string(currentRoute.size()) + ", current index: " + std::to_string(routeIndex));
+        sf::Vector2f nextTarget = world.getBlockCenter(currentRoute[routeIndex]);
 
         sf::Vector2f direction = nextTarget - position;
-        float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        float distanceToTarget = std::sqrt(direction.x * direction.x + direction.y * direction.y);
         
-        // // Accelerate towards the target
-        // if (currentSpeed < maxSpeed) {
-
-        //     // Make acceleration proportional to current speed compared with max speed
-        //     // Gives an acceleration curve that starts fast and slows down as it approaches max speed
-        //     float acceleration = 10.f * (1 - currentSpeed / maxSpeed); // Adjust the 10.f to control overall acceleration
-        //     currentSpeed += acceleration * deltaTime; // Adjust acceleration as needed
-            
-        //     if (currentSpeed > maxSpeed) {
-        //         currentSpeed = maxSpeed;
-        //     }
-        // }
         currentSpeed = 250.f; // Set a constant speed for now
-        
-        if (length > 3) {
-            direction /= length; // Normalize the direction
-            position += direction * currentSpeed * deltaTime; 
-        } else {
-            // currentSpeed /= 2; // Stop when close to the target
+
+        float movementThisTick = currentSpeed * deltaTime;
+
+        if (movementThisTick > distanceToTarget) {
+
+            logger->log("Overshooting target, moving directly to target and advancing route index");
             
-            // Remove the reached target from the route
-            currentRoute.erase(currentRoute.begin());
+            position = nextTarget; // Move directly to the target if we would overshoot
+            routeIndex++; // Advance to the next route point
+            // updateLogic();
 
-            // Check if route cut of by new walls, if so recalculate
-            for (const auto& step : currentRoute) {
-                if (world.isOccupied(world.getBlockCenter(step))) {
-                    
-                    // If target is blocked then we should also update it
-                    if  (world.isOccupied(target)) {
-                        setNewTarget();
-                    }
+        } else {
+            direction /= distanceToTarget; // Normalize the direction
+            position += direction * currentSpeed * deltaTime; 
+        }     
+    }
 
-                    calculateRoute();
-                    return;
-                }
+
+    bool isPathBlocked() {
+        for (std::size_t i = routeIndex; i < currentRoute.size(); ++i) {
+            if (world.isOccupied(world.getBlockCenter(currentRoute[i]))) {
+                return true;
             }
         }
+        return false;
     }
 
 
@@ -79,12 +128,21 @@ public:
         // worldModel.clear(5); // Clear any data older than 5 seconds
 
         // For each block in range, update the world model with the current state of the block
-        float observationRange = 100.f;
+        int observationRange = 3;
         std::vector<sf::Vector2i> blocksInRange = world.getBlocksInRange(position, observationRange);
+        logger->log("Observing " + std::to_string(blocksInRange.size()) + " blocks in range");
 
         for (const auto& block : blocksInRange) {
+
+            logger->log("Attempting update for block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ")");
+
             bool occupied = world.isOccupied(world.getBlockCenter(block));
+
+            logger->log("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") is " + (occupied ? "Occupied" : "Empty"));
+
             worldModel.update(block, occupied ? BlockState::Occupied : BlockState::Empty);
+
+            logger->log("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") update complete");
         }
     }
 
@@ -111,8 +169,8 @@ public:
         array.append({ bottomRight, color });
 
         // Do smal indicator for each route step
-        for (const auto& step : currentRoute) {
-            sf::Vector2f stepPos = world.getBlockCenter(step);
+        for (std::size_t i = routeIndex; i < currentRoute.size(); ++i) {
+            sf::Vector2f stepPos = world.getBlockCenter(currentRoute[i]);
             sf::Vector2f stepTopLeft = stepPos - sf::Vector2f(5.f, 5.f);
             sf::Vector2f stepTopRight = stepPos + sf::Vector2f(5.f, -5.f);
             sf::Vector2f stepBottomLeft = stepPos + sf::Vector2f(-5.f, 5.f);
@@ -129,8 +187,12 @@ public:
     }
 
 private:
+    std::shared_ptr<WalkerLogger> logger;
+
     sf::Vector2f position;
     sf::Vector2f target;
+
+    sf::Vector2i currentBlock;
 
     float currentSpeed;
     float maxSpeed;
@@ -141,18 +203,20 @@ private:
     sf::Color color;
     World& world;
     std::vector<sf::Vector2i> currentRoute;
+    std::size_t routeIndex = 0;
 
     WorldModel worldModel;
 
     void setNewTarget() {
         Random rand;
-        int randX = rand.random(0, worldSize.x);
-        int randY = rand.random(0, worldSize.y);
+        int randX = rand.random(0, worldSize.x - 1);
+        int randY = rand.random(0, worldSize.y - 1);
         target = world.getBlockCenter({ (int)randX, (int)randY });
     }
 
 
     void calculateRoute() {
         currentRoute = worldModel.calculatePath(world.getBlock(position), world.getBlock(target));
+        routeIndex = 0;
     }
 };

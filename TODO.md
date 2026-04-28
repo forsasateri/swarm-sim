@@ -14,3 +14,12 @@
 - Fix warnings
 - Switch walkers to more direct state machine with clearer logic
 - Separate pathfinding tools in own file
+
+
+## Performance
+- Handle run to far to reach target
+    - If movement this tick > distance to target, just move to target and stop
+- Fixed tick death spiral?
+- Only observe on block change
+- Route blockage scan still walks remaining route at each waypoint in randomWalker.cc:66.
+- Local + global time meassuremnts to visualize

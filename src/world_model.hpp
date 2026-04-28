@@ -4,10 +4,13 @@
 #include <SFML/System.hpp>
 #include <vector>
 #include <chrono>
-#include <map>
 #include <queue>
+#include <limits>
+#include <algorithm>
+#include <memory>
 
 #include "util/matrix.hpp"
+#include "util/logger.hpp"
 
 using Clock = std::chrono::steady_clock;
 using TimePoint = Clock::time_point;
@@ -76,23 +79,20 @@ private:
 
 class WorldModel {
 public:
-    WorldModel(sf::Vector2i worldSize) : m_world_model(worldSize.x, worldSize.y) {};
+    WorldModel(sf::Vector2i worldSize, std::shared_ptr<WalkerLogger> logger)
+        : m_world_model(worldSize.x, worldSize.y), logger(std::move(logger)) {}
 
     void update(sf::Vector2i block, BlockState state) {
+        if (logger == nullptr) {
+            std::cerr << "Error: WorldModel logger is not set. Cannot log updates." << std::endl;
+            return;
+        }
+
+        logger->log("Updating block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") to state " + 
+            (state == BlockState::Occupied ? "Occupied" : "Empty"));
+
         m_world_model(block.x, block.y).update(state);
     }
-
-    // void clear(int dataOlderThanSec) {
-    //     int dataOlderThanMillisec = dataOlderThanSec * 1000; // Turn sec into millisec
-    //     for (int x = 0; x < m_world_model.getWidth(); x++) {
-    //         for (int y = 0; y < m_world_model.getHeight(); y++) {
-    //             if (m_world_model(x, y).dataAge() > dataOlderThanMillisec) {
-    //                 m_world_model(x, y).update(BlockState::Unknown);
-    //             }
-    //         }
-    //     }
-    // }
-
 
 
     // PATHFINDING STUFF
@@ -100,6 +100,7 @@ public:
 
     struct Node {
         sf::Vector2i pos;
+        int gCost;
         int fCost;
 
         // Priority queue needs to pick the SMALLEST fCost
@@ -113,82 +114,129 @@ public:
         return std::abs(a.x - b.x) + std::abs(a.y - b.y);
     }
 
-    std::vector<sf::Vector2i> getNeighbours(sf::Vector2i block) {
-        std::vector<sf::Vector2i> neighbours{};
-
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                if (dx == 0 && dy == 0) continue; // Skip the current block
-
-                int neighbourX = block.x + dx;
-                int neighbourY = block.y + dy;
-
-                if (neighbourX >= 0 && neighbourX < m_world_model.getWidth() &&
-                    neighbourY >= 0 && neighbourY < m_world_model.getHeight()) {
-                        
-                        if (m_world_model(neighbourX, neighbourY).isOccupied()) {
-                            continue; // Skip occupied blocks
-                        }
-
-                        // For corner moves both adjacent blocks must be free
-                        if (dx != 0 && dy != 0) {
-                            if (m_world_model(block.x + dx, block.y).isOccupied() || m_world_model(block.x, block.y + dy).isOccupied()) {
-                                continue; // Skip diagonal moves
-                            }
-                        }
-                        neighbours.push_back({ neighbourX, neighbourY });
-                }
-            }
-        }
-
-        return neighbours;
-    }
-
     std::vector<sf::Vector2i> calculatePath(sf::Vector2i start, sf::Vector2i target) {
+
+        logger->log("Calculating path from (" + std::to_string(start.x) + ", " + std::to_string(start.y) + 
+            ") to (" + std::to_string(target.x) + ", " + std::to_string(target.y) + ")");
+
+        const int width = m_world_model.getWidth();
+        const int height = m_world_model.getHeight();
+        const int totalCells = width * height;
+
+        auto inBounds = [width, height](const sf::Vector2i& p) {
+            return p.x >= 0 && p.x < width && p.y >= 0 && p.y < height;
+        };
+
+        auto toIndex = [width](const sf::Vector2i& p) {
+            return p.y * width + p.x;
+        };
+
+        auto toPos = [width](int index) {
+            return sf::Vector2i{ index % width, index / width };
+        };
+
+        if (!inBounds(start) || !inBounds(target)) {
+            logger->log("Cannot calculate path: start or target is out of bounds");
+            return {};
+        }
 
         // Frontier: Nodes we need to visit, sorted by lowest F-cost
         std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openSet;
-        openSet.push({start, 0});
+        openSet.push({ start, 0, heuristic(start, target) });
 
-        // Tracking costs and parentage
-        std::map<sf::Vector2i, sf::Vector2i> cameFrom;
-        std::map<sf::Vector2i, int> gCost;
+        // Tracking costs and parentage using flat arrays to avoid map overhead.
+        const int INF = std::numeric_limits<int>::max();
+        std::vector<int> gCost(totalCells, INF);
+        std::vector<int> parent(totalCells, -1);
 
-        gCost[start] = 0;
+        const int startIndex = toIndex(start);
+        const int targetIndex = toIndex(target);
+        gCost[startIndex] = 0;
 
         while (!openSet.empty()) {
-            sf::Vector2i current = openSet.top().pos;
+            Node currentNode = openSet.top();
             openSet.pop();
+
+            const sf::Vector2i current = currentNode.pos;
+            const int currentIndex = toIndex(current);
+
+            // Skip stale queue entries so we only expand the latest best-known route to this node.
+            if (currentNode.gCost != gCost[currentIndex]) {
+                continue;
+            }
 
             // Goal reached!
             if (current == target) {
                 std::vector<sf::Vector2i> path;
-                while (current != start) {
-                    path.push_back(current);
-                    current = cameFrom[current];
+
+                int walkIndex = targetIndex;
+                while (walkIndex != startIndex) {
+                    if (walkIndex < 0) {
+
+                        logger->log("Error reconstructing path: invalid index encountered. This should not happen.");
+                        return {};
+                    }
+
+                    path.push_back(toPos(walkIndex));
+                    walkIndex = parent[walkIndex];
                 }
+
                 std::reverse(path.begin(), path.end());
+
+                logger->log("Path found with " + std::to_string(path.size()) + " steps.");
+
                 return path;
             }
 
-            for (sf::Vector2i neighbor : getNeighbours(current)) {
-                int newGCost = gCost[current] + 1; // Assuming move cost of 1
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0) {
+                        continue;
+                    }
 
-                if (gCost.find(neighbor) == gCost.end() || newGCost < gCost[neighbor]) {
-                    gCost[neighbor] = newGCost;
-                    int fCost = newGCost + heuristic(neighbor, target);
-                    openSet.push({neighbor, fCost});
-                    cameFrom[neighbor] = current;
+                    const int neighborX = current.x + dx;
+                    const int neighborY = current.y + dy;
+
+                    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+                        continue;
+                    }
+
+                    if (m_world_model(neighborX, neighborY).isOccupied()) {
+                        continue;
+                    }
+
+                    // For corner moves both adjacent blocks must be free.
+                    if (dx != 0 && dy != 0) {
+                        if (m_world_model(current.x + dx, current.y).isOccupied() ||
+                            m_world_model(current.x, current.y + dy).isOccupied()) {
+                            continue;
+                        }
+                    }
+
+                    const sf::Vector2i neighbor{ neighborX, neighborY };
+                    const int neighborIndex = toIndex(neighbor);
+                    int newGCost = gCost[currentIndex] + 1; // Assuming move cost of 1
+
+                    if (newGCost < gCost[neighborIndex]) {
+                        gCost[neighborIndex] = newGCost;
+                        parent[neighborIndex] = currentIndex;
+
+                        int fCost = newGCost + heuristic(neighbor, target);
+                        openSet.push({ neighbor, newGCost, fCost });
+                    }
                 }
             }
         }
 
+        logger->log("No path found.");
         return {}; // Return empty if no path found
     }
 
 
 private:
     Matrix<WorldModelBlock> m_world_model;
+
+    std::shared_ptr<WalkerLogger> logger;
 
 };
 

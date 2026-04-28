@@ -2,6 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <optional>
+#include <memory>
 
 #include "randomWalker.cc"
 #include "world/world.hpp"
@@ -21,7 +22,7 @@ void drawWalkers(sf::RenderWindow& window, std::vector<RandomWalker>& walkers) {
 	window.draw( vertexArray );
 }
 
-const int TICK_RATE = 60;
+const int TICK_RATE = 20;
 const float TICK_DURATION = 1.f / TICK_RATE; // Duration of each tick
 // TODO: Logic tick speed
 // Provide split between simple movement and complex logic
@@ -55,11 +56,22 @@ int main()
 
 	std::vector<RandomWalker> walkers;
 
-	int colorStep = 75;
+	int colorStep = 50;
+	int walkerId = 0;
 	for (int a = 0; a < 255; a += colorStep) {
 		for (int b = 0; b < 255; b += colorStep) {
 			for (int c = 0; c < 255; c += colorStep) {
-				walkers.emplace_back( worldSize, sf::Color(a, b, c), world );
+
+
+				std::shared_ptr<WalkerLogger> logger = std::make_shared<WalkerLogger>(walkerId);
+				logger->clear();
+				walkers.emplace_back( 
+					worldSize, 
+					sf::Color(a, b, c), 
+					world, 
+					logger
+				);
+				walkerId++;
 			}
 		}
 	}
