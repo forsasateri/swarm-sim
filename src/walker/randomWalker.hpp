@@ -4,24 +4,23 @@
 #include <utility>
 #include <memory>
 
-#include "random.cc"
+#include "util/random.hpp"
 
 #include "world/world.hpp"
-#include "world_model.hpp"
+#include "worldModel.hpp"
 #include "util/logger.hpp"
+#include "world/coordinateSystem.hpp"
 
 class RandomWalker {
 public:
     RandomWalker(
-        sf::Vector2i worldSize, 
         sf::Color color, 
         World& world,
-        std::shared_ptr<WalkerLogger> walkerLogger
+        std::shared_ptr<GameLogger> walkerLogger
     ) : world(world),
         logger(std::move(walkerLogger)),
-        worldModel(worldSize, logger) {
+        worldModel(logger) {
         
-        this->worldSize = worldSize;
         this->color = color;
         position = { 0.f, 0.f };
         currentSpeed = 0;
@@ -101,7 +100,7 @@ public:
         }
 
         logger->debug("Route length: " + std::to_string(currentRoute.size()) + ", current index: " + std::to_string(routeIndex));
-        sf::Vector2f nextTarget = world.getBlockCenter(currentRoute[routeIndex]);
+        sf::Vector2f nextTarget = gridToWorld(currentRoute[routeIndex]); //world.getBlockCenter(currentRoute[routeIndex]);
 
         sf::Vector2f direction = nextTarget - position;
         float distanceToTarget = std::sqrt(direction.x * direction.x + direction.y * direction.y);
@@ -128,7 +127,7 @@ public:
 
     bool isPathBlocked() {
         for (std::size_t i = routeIndex; i < currentRoute.size(); ++i) {
-            if (world.isOccupied(world.getBlockCenter(currentRoute[i]))) {
+            if (world.isOccupied(gridToWorld(currentRoute[i]))) {
                 return true;
             }
         }
@@ -148,7 +147,7 @@ public:
 
             logger->debug("Attempting update for block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ")");
 
-            bool occupied = world.isOccupied(world.getBlockCenter(block));
+            bool occupied = world.isOccupied(gridToWorld(block));
 
             logger->debug("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") is " + (occupied ? "Occupied" : "Empty"));
 
@@ -160,7 +159,7 @@ public:
 
 
     void setTargetFromUSerInput(sf::Vector2i mousePos) {
-        target = world.getBlockCenter(world.getBlock({ mousePos.x, mousePos.y }));
+        target = gridToWorld(world.getBlock({ mousePos.x, mousePos.y }));
         calculateRoute();
     }
 
@@ -182,7 +181,7 @@ public:
 
         // Do smal indicator for each route step
         for (std::size_t i = routeIndex; i < currentRoute.size(); ++i) {
-            sf::Vector2f stepPos = world.getBlockCenter(currentRoute[i]);
+            sf::Vector2f stepPos = gridToWorld(currentRoute[i]);
             sf::Vector2f stepTopLeft = stepPos - sf::Vector2f(5.f, 5.f);
             sf::Vector2f stepTopRight = stepPos + sf::Vector2f(5.f, -5.f);
             sf::Vector2f stepBottomLeft = stepPos + sf::Vector2f(-5.f, 5.f);
@@ -199,7 +198,7 @@ public:
     }
 
 private:
-    std::shared_ptr<WalkerLogger> logger;
+    std::shared_ptr<GameLogger> logger;
 
     sf::Vector2f position;
     sf::Vector2f target;
@@ -211,7 +210,6 @@ private:
 
     float size = 20.f;
 
-    sf::Vector2i worldSize;
     sf::Color color;
     World& world;
     std::vector<sf::Vector2i> currentRoute;
@@ -221,9 +219,9 @@ private:
 
     void setNewTarget() {
         Random rand;
-        int randX = rand.random(0, worldSize.x - 1);
-        int randY = rand.random(0, worldSize.y - 1);
-        target = world.getBlockCenter({ (int)randX, (int)randY });
+        int randX = rand.random(0, GRID_SIZE_X - 1);
+        int randY = rand.random(0, GRID_SIZE_Y - 1);
+        target = gridToWorld(randX, randY);
     }
 
 

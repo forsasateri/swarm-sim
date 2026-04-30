@@ -4,8 +4,10 @@
 #include <optional>
 #include <memory>
 
-#include "randomWalker.cc"
+#include "walker/randomWalker.hpp"
 #include "world/world.hpp"
+#include "util/logger.hpp"
+#include "world/coordinateSystem.hpp"
 
 // TODO: Fixed TICK rate
 // Second info screen for selected unit
@@ -22,6 +24,7 @@ void drawWalkers(sf::RenderWindow& window, std::vector<RandomWalker>& walkers) {
 	window.draw( vertexArray );
 }
 
+const uint32_t FRAME_LIMIT = 120;
 const int TICK_RATE = 20;
 const float TICK_DURATION = 1.f / TICK_RATE; // Duration of each tick
 // TODO: Logic tick speed
@@ -31,19 +34,12 @@ const float TICK_DURATION = 1.f / TICK_RATE; // Duration of each tick
 int main()
 {
 
-	sf::Vector2i windowSize = { 2000, 1000 };
-	int blockSize = 25;
-	sf::Vector2i worldSize = { windowSize.x/blockSize, windowSize.y/blockSize }; // Size in blocks
+	sf::Vector2i windowSize = { WORLD_SIZE_X, WORLD_SIZE_Y };
 
-	sf::RenderWindow window( sf::VideoMode( 
-		{ (unsigned int)windowSize.x, 
-			(unsigned int)windowSize.y } 
-		), "SFML works!" );
+	sf::RenderWindow window( sf::VideoMode({ WORLD_SIZE_X, WORLD_SIZE_Y }), "Swarm Simulation" );
 	
-	// window.setVerticalSyncEnabled(true); // call it once after creating the window
-	window.setFramerateLimit(120); // call it once after creating the window
+	window.setFramerateLimit(FRAME_LIMIT);
 	window.setPosition({0, 0});
-
 
 	sf::Font font("arial.ttf");
 	sf::Text cornerText(font);
@@ -51,8 +47,7 @@ int main()
 	cornerText.setFillColor(sf::Color::Yellow);
 
 
-	World world( windowSize );
-
+	World world{};
 
 	std::vector<RandomWalker> walkers;
 
@@ -63,10 +58,9 @@ int main()
 			for (int c = 0; c < 255; c += colorStep) {
 
 
-				std::shared_ptr<WalkerLogger> logger = std::make_shared<WalkerLogger>(walkerId);
+				std::shared_ptr<GameLogger> logger = std::make_shared<GameLogger>("walker_" + std::to_string(walkerId));
 				logger->clear();
 				walkers.emplace_back( 
-					worldSize, 
 					sf::Color(a, b, c), 
 					world, 
 					logger

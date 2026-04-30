@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#include <SFML/System.hpp>
+
 template<typename T>
 class Matrix {
 
@@ -16,6 +18,14 @@ public:
 
     const T& operator()(size_t x, size_t y) const {
         return data[y * width + x];
+    }
+
+    T& operator()(sf::Vector2i pos) {
+        return data[pos.y * width + pos.x];
+    }
+
+    const T& operator()(sf::Vector2i pos) const {
+        return data[pos.y * width + pos.x];
     }
 
 

@@ -79,8 +79,9 @@ private:
 
 class WorldModel {
 public:
-    WorldModel(sf::Vector2i worldSize, std::shared_ptr<WalkerLogger> logger)
-        : m_world_model(worldSize.x, worldSize.y), logger(std::move(logger)) {}
+    WorldModel(std::shared_ptr<GameLogger> logger): 
+        worldModel_(GRID_SIZE_X, GRID_SIZE_Y),    
+        logger(std::move(logger)) {}
 
     void update(sf::Vector2i block, BlockState state) {
         if (logger == nullptr) {
@@ -91,7 +92,7 @@ public:
         logger->debug("Updating block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") to state " + 
             (state == BlockState::Occupied ? "Occupied" : "Empty"));
 
-        m_world_model(block.x, block.y).update(state);
+        worldModel_(block.x, block.y).update(state);
     }
 
 
@@ -120,18 +121,18 @@ public:
             ") to (" + std::to_string(target.x) + ", " + std::to_string(target.y) + ")");
 
             
-        if (start.x < 0 || start.x >= m_world_model.getWidth() || start.y < 0 || start.y >= m_world_model.getHeight()) {
+        if (start.x < 0 || start.x >= worldModel_.getWidth() || start.y < 0 || start.y >= worldModel_.getHeight()) {
             logger->critical("Start position (" + std::to_string(start.x) + ", " + std::to_string(start.y) + ") is out of bounds");
             return {};
         }
 
-        if (target.x < 0 || target.x >= m_world_model.getWidth() || target.y < 0 || target.y >= m_world_model.getHeight()) {
+        if (target.x < 0 || target.x >= worldModel_.getWidth() || target.y < 0 || target.y >= worldModel_.getHeight()) {
             logger->critical("Target position (" + std::to_string(target.x) + ", " + std::to_string(target.y) + ") is out of bounds");
             return {};
         }
 
-        const int width = m_world_model.getWidth();
-        const int height = m_world_model.getHeight();
+        const int width = worldModel_.getWidth();
+        const int height = worldModel_.getHeight();
         const int totalCells = width * height;
 
         auto inBounds = [width, height](const sf::Vector2i& p) {
@@ -212,14 +213,14 @@ public:
                         continue;
                     }
 
-                    if (m_world_model(neighborX, neighborY).isOccupied()) {
+                    if (worldModel_(neighborX, neighborY).isOccupied()) {
                         continue;
                     }
 
                     // For corner moves both adjacent blocks must be free.
                     if (dx != 0 && dy != 0) {
-                        if (m_world_model(current.x + dx, current.y).isOccupied() ||
-                            m_world_model(current.x, current.y + dy).isOccupied()) {
+                        if (worldModel_(current.x + dx, current.y).isOccupied() ||
+                            worldModel_(current.x, current.y + dy).isOccupied()) {
                             continue;
                         }
                     }
@@ -245,9 +246,9 @@ public:
 
 
 private:
-    Matrix<WorldModelBlock> m_world_model;
+    Matrix<WorldModelBlock> worldModel_;
 
-    std::shared_ptr<WalkerLogger> logger;
+    std::shared_ptr<GameLogger> logger;
 
 };
 

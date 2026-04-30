@@ -10,23 +10,14 @@
 
 #include "util/matrix.hpp"
 #include "block.hpp"
-
-// Extend Vector2i for use in std::map and std::set
-namespace std {
-    template <>
-    struct less<sf::Vector2i> {
-        bool operator()(const sf::Vector2i& a, const sf::Vector2i& b) const {
-            return std::tie(a.x, a.y) < std::tie(b.x, b.y);
-        }
-    };
-}
+#include "coordinateSystem.hpp"
+#include "util/vectorAdditions.hpp"
 
 
 class World {
 
 public:
-    World(sf::Vector2i size) : worldSize(size), occupancyMatrix(size.x / blockSize.x, size.y / blockSize.y) {
-        // occupancyMatrix = Matrix<bool>( worldSize.x / blockSize.x, worldSize.y / blockSize.y );
+    World(): occupancyMatrix(GRID_SIZE_X, GRID_SIZE_Y) {
         buildGridLines();
     }
 
@@ -39,8 +30,8 @@ public:
             for (int y = 0; y < occupancyMatrix.getHeight(); y++) {
                 if (occupancyMatrix(x, y).isOccupied()) {
                     
-                    sf::RectangleShape blockShape({ (float)blockSize.x, (float)blockSize.y });
-                    blockShape.setPosition({x * blockSize.x, y * blockSize.y});
+                    sf::RectangleShape blockShape({ (float)BLOCK_SIZE_X, (float)BLOCK_SIZE_Y });
+                    blockShape.setPosition({x * BLOCK_SIZE_X, y * BLOCK_SIZE_Y});
                     blockShape.setFillColor(sf::Color::Red);
                     window.draw(blockShape);
                 }
@@ -49,10 +40,9 @@ public:
     }
 
     void handleClick(sf::Vector2i mousePos) {
-        int blockX = mousePos.x / blockSize.x;
-        int blockY = mousePos.y / blockSize.y;
+        sf::Vector2i blockPos = getBlock(sf::Vector2f(mousePos));
 
-        occupancyMatrix(blockX, blockY).toggle();
+        occupancyMatrix(blockPos).toggle();
     }
 
 
@@ -65,18 +55,19 @@ public:
             return true; // Treat out-of-bounds as occupied
         }
 
-        return occupancyMatrix(blockX, blockY).isOccupied();
+        return occupancyMatrix(blockPos).isOccupied();
     }
 
+    // TODO: Modernize with new coordinate system handlers
     sf::Vector2i getBlock(sf::Vector2f position) {
 
         // Out of bounds check
-        if (position.x < 0 || position.x >= worldSize.x || position.y < 0 || position.y >= worldSize.y) {
+        if (position.x < 0 || position.x >= WORLD_SIZE_X || position.y < 0 || position.y >= WORLD_SIZE_Y) {
             std::cerr << "Error: Position (" << position.x << ", " << position.y << ") is out of bounds" << std::endl;
         }
 
-        int blockX = std::floor(position.x) / blockSize.x;
-        int blockY = std::floor(position.y) / blockSize.y;
+        int blockX = std::floor(position.x) / BLOCK_SIZE_X;
+        int blockY = std::floor(position.y) / BLOCK_SIZE_Y;
 
         // Additional check to ensure block coordinates are within bounds of the occupancy matrix
         if (blockX < 0 || blockX >= occupancyMatrix.getWidth() || blockY < 0 || blockY >= occupancyMatrix.getHeight()) {
@@ -105,15 +96,6 @@ public:
 
         return blocksInRange;
     }
-
-
-    sf::Vector2f getBlockCenter(sf::Vector2i block) {
-        return sf::Vector2f(
-            block.x * blockSize.x + blockSize.x / 2.f, 
-            block.y * blockSize.y + blockSize.y / 2.f
-        );
-    }
-
 
     std::vector<sf::Vector2i> getNeighbours(sf::Vector2i block) {
         std::vector<sf::Vector2i> neighbours{};
@@ -191,13 +173,10 @@ public:
                 occupancyMatrix(wall_x, y).set(BlockType::Occupied);
             }
         }
-
     }
 
 
 private:
-sf::Vector2i worldSize;
-sf::Vector2i blockSize = { 25, 25 };
 
 // Use 2d matrix to track which blocks are occupied (wall)
 Matrix<Block> occupancyMatrix;
@@ -205,18 +184,17 @@ Matrix<Block> occupancyMatrix;
 sf::Color gridColor = sf::Color::White;
 sf::VertexArray gridLines;
 
-
 void buildGridLines() {
     gridLines.clear();
     gridLines.setPrimitiveType(sf::PrimitiveType::Lines);
     
-    for (float x = 0; x < worldSize.x; x += blockSize.x) {
+    for (float x = 0; x < WORLD_SIZE_X; x += BLOCK_SIZE_X) {
         gridLines.append(sf::Vertex{{ x, 0 }, gridColor });
-        gridLines.append(sf::Vertex{{ x, worldSize.y }, gridColor});
+        gridLines.append(sf::Vertex{{ x, WORLD_SIZE_Y }, gridColor});
     }
-    for (float y = 0; y < worldSize.y; y += blockSize.y) {
+    for (float y = 0; y < WORLD_SIZE_Y; y += BLOCK_SIZE_Y) {
         gridLines.append(sf::Vertex{{ 0, y }, gridColor });
-        gridLines.append(sf::Vertex{{ worldSize.x, y }, gridColor});
+        gridLines.append(sf::Vertex{{ WORLD_SIZE_X, y }, gridColor});
     }
 }
 

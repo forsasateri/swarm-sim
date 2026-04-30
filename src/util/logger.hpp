@@ -7,6 +7,7 @@
 
 const bool AGGRESSIVE_FLUSHING = false;
 
+
 enum class LogLevel {
     DEBUG,
     INFO,
@@ -16,18 +17,28 @@ enum class LogLevel {
     DISABLED
 };
 
-class WalkerLogger {
+const LogLevel DEFAULT_LOG_LEVEL = LogLevel::INFO;
+
+class GameLogger {
 public:
-    WalkerLogger(int id, LogLevel level = LogLevel::INFO) : 
-        id(id), 
-        log_file_name("logs/walker_" + std::to_string(id) + ".log"),
+
+    GameLogger(): 
+        name("default"), 
+        log_file_name("logs/default.log"),
+        log_file(log_file_name, std::ios_base::app),
+        current_log_level(DEFAULT_LOG_LEVEL) {
+    }
+
+    GameLogger(std::string name, LogLevel level = DEFAULT_LOG_LEVEL) : 
+        name(name), 
+        log_file_name("logs/" + name + ".log"),
         log_file(log_file_name, std::ios_base::app),
         current_log_level(level) {
     }
 
     // Delete copy constructor and assignment operator to prevent copying
-    WalkerLogger(const WalkerLogger&) = delete;
-    WalkerLogger& operator=(const WalkerLogger&) = delete;
+    GameLogger(const GameLogger&) = delete;
+    GameLogger& operator=(const GameLogger&) = delete;
 
     void debug(const std::string& message) {
         if (current_log_level <= LogLevel::DEBUG) {
@@ -69,7 +80,7 @@ public:
 
     void log(const std::string& message) {
 
-        log_file << "[Walker " << id << "] " << message << std::endl;
+        log_file << "[" << name << "] " << message << std::endl;
 
         if (AGGRESSIVE_FLUSHING) {
             log_file.flush(); // Ensure the message is written to the file immediately
@@ -77,7 +88,7 @@ public:
     }
 
 private:
-    int id;
+    std::string name;
     std::string log_file_name;
     std::ofstream log_file;
     LogLevel current_log_level;
