@@ -88,7 +88,7 @@ public:
             return;
         }
 
-        logger->log("Updating block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") to state " + 
+        logger->debug("Updating block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") to state " + 
             (state == BlockState::Occupied ? "Occupied" : "Empty"));
 
         m_world_model(block.x, block.y).update(state);
@@ -116,8 +116,19 @@ public:
 
     std::vector<sf::Vector2i> calculatePath(sf::Vector2i start, sf::Vector2i target) {
 
-        logger->log("Calculating path from (" + std::to_string(start.x) + ", " + std::to_string(start.y) + 
+        logger->info("Calculating path from (" + std::to_string(start.x) + ", " + std::to_string(start.y) + 
             ") to (" + std::to_string(target.x) + ", " + std::to_string(target.y) + ")");
+
+            
+        if (start.x < 0 || start.x >= m_world_model.getWidth() || start.y < 0 || start.y >= m_world_model.getHeight()) {
+            logger->critical("Start position (" + std::to_string(start.x) + ", " + std::to_string(start.y) + ") is out of bounds");
+            return {};
+        }
+
+        if (target.x < 0 || target.x >= m_world_model.getWidth() || target.y < 0 || target.y >= m_world_model.getHeight()) {
+            logger->critical("Target position (" + std::to_string(target.x) + ", " + std::to_string(target.y) + ") is out of bounds");
+            return {};
+        }
 
         const int width = m_world_model.getWidth();
         const int height = m_world_model.getHeight();
@@ -136,7 +147,7 @@ public:
         };
 
         if (!inBounds(start) || !inBounds(target)) {
-            logger->log("Cannot calculate path: start or target is out of bounds");
+            logger->error("Cannot calculate path: start or target is out of bounds");
             return {};
         }
 
@@ -173,7 +184,7 @@ public:
                 while (walkIndex != startIndex) {
                     if (walkIndex < 0) {
 
-                        logger->log("Error reconstructing path: invalid index encountered. This should not happen.");
+                        logger->critical("Error reconstructing path: invalid index encountered. This should not happen.");
                         return {};
                     }
 
@@ -183,7 +194,7 @@ public:
 
                 std::reverse(path.begin(), path.end());
 
-                logger->log("Path found with " + std::to_string(path.size()) + " steps.");
+                logger->info("Path found with " + std::to_string(path.size()) + " steps.");
 
                 return path;
             }
@@ -228,7 +239,7 @@ public:
             }
         }
 
-        logger->log("No path found.");
+        logger->info("No path found.");
         return {}; // Return empty if no path found
     }
 

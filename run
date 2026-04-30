@@ -1,2 +1,3 @@
+rm logs/*.log
 cmake --build build
 ./build/bin/main

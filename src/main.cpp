@@ -56,7 +56,7 @@ int main()
 
 	std::vector<RandomWalker> walkers;
 
-	int colorStep = 50;
+	int colorStep = 100;
 	int walkerId = 0;
 	for (int a = 0; a < 255; a += colorStep) {
 		for (int b = 0; b < 255; b += colorStep) {

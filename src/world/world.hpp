@@ -69,8 +69,20 @@ public:
     }
 
     sf::Vector2i getBlock(sf::Vector2f position) {
-        int blockX = position.x / blockSize.x;
-        int blockY = position.y / blockSize.y;
+
+        // Out of bounds check
+        if (position.x < 0 || position.x >= worldSize.x || position.y < 0 || position.y >= worldSize.y) {
+            std::cerr << "Error: Position (" << position.x << ", " << position.y << ") is out of bounds" << std::endl;
+        }
+
+        int blockX = std::floor(position.x) / blockSize.x;
+        int blockY = std::floor(position.y) / blockSize.y;
+
+        // Additional check to ensure block coordinates are within bounds of the occupancy matrix
+        if (blockX < 0 || blockX >= occupancyMatrix.getWidth() || blockY < 0 || blockY >= occupancyMatrix.getHeight()) {
+            std::cerr << "Error: Calculated block coordinates (" << blockX << ", " << blockY << ") are out of bounds" << std::endl;
+        }
+
         return { blockX, blockY };
     }
 
@@ -96,7 +108,10 @@ public:
 
 
     sf::Vector2f getBlockCenter(sf::Vector2i block) {
-        return sf::Vector2f(block.x * blockSize.x + blockSize.x / 2.f, block.y * blockSize.y + blockSize.y / 2.f);
+        return sf::Vector2f(
+            block.x * blockSize.x + blockSize.x / 2.f, 
+            block.y * blockSize.y + blockSize.y / 2.f
+        );
     }
 
 

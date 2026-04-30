@@ -36,14 +36,19 @@ public:
     RandomWalker& operator=(RandomWalker&&) noexcept = delete;
 
     void updateLogic() {
-        logger->log("Updating logic");
+        logger->info("Updating logic");
 
-        logger->log("Observing world");
+        logger->info("Current position: (" + std::to_string(position.x) + ", " + std::to_string(position.y) + 
+            "), current block: (" + std::to_string(currentBlock.x) + ", " + std::to_string(currentBlock.y) + 
+            "), target: (" + std::to_string(target.x) + ", " + std::to_string(target.y) + 
+            "), route length: " + std::to_string(currentRoute.size()));
+
+        logger->debug("Observing world");
         observeWorld();
-        logger->log("World observed");
+        logger->debug("World observed");
 
         if (isPathBlocked()) {
-            logger->log("Path is blocked, recalculating route");
+            logger->info("Path is blocked, recalculating route");
             calculateRoute();
         }
 
@@ -55,41 +60,47 @@ public:
 
             make_new_route_attempts++;
             if (make_new_route_attempts > 10) {
-                logger->log("Failed to find valid route after 10 attempts, giving up");
+                logger->error("Failed to find valid route after 10 attempts, giving up");
                 exit(-1);
             }
 
-            logger->log("No valid route or target reached, picking new target");
+            logger->info("No valid route or target reached, picking new target");
             setNewTarget();
             calculateRoute();
 
             reachedTarget = world.getBlock(position) == world.getBlock(target);
             noValidRoute = currentRoute.empty();
-            logger->log("Set new target and calculated route. Reached target: " + std::to_string(reachedTarget) + ", no valid route: " + std::to_string(noValidRoute));
-            logger->log("Path length: " + std::to_string(currentRoute.size()));
+            logger->info("Set new target and calculated route. Reached target: " + std::to_string(reachedTarget) + ", no valid route: " + std::to_string(noValidRoute));
+            logger->info("Path length: " + std::to_string(currentRoute.size()));
         }
     }
 
     void step(float deltaTime)
     {
-        logger->log("Stepping with deltaTime: " + std::to_string(deltaTime));
+        logger->debug("Stepping with deltaTime: " + std::to_string(deltaTime));
         
         int route_length = currentRoute.size();
 
-        sf::Vector2i newCurrentBlock = world.getBlock(position);
-        if (newCurrentBlock != currentBlock || route_length == 0) {
-            logger->log("Entered new block: (" + std::to_string(newCurrentBlock.x) + ", " + std::to_string(newCurrentBlock.y) + ")");
-            currentBlock = newCurrentBlock;
+        if (currentRoute.empty() || routeIndex >= currentRoute.size()) {
+            logger->debug("No active route to step along; updating logic before moving");
             updateLogic();
-            logger->log("Logic updated");
+            return;
         }
 
-        // if (currentRoute.empty() || routeIndex >= currentRoute.size()) {
-        //     logger->log("No active route available after logic update; skipping movement");
-        //     return;
-        // }
+        sf::Vector2i newCurrentBlock = world.getBlock(position);
+        if (newCurrentBlock != currentBlock || route_length == 0) {
+            logger->info("Entered new block: (" + std::to_string(newCurrentBlock.x) + ", " + std::to_string(newCurrentBlock.y) + ")");
+            currentBlock = newCurrentBlock;
+            updateLogic();
+            logger->debug("Logic updated");
 
-        logger->log("Route length: " + std::to_string(currentRoute.size()) + ", current index: " + std::to_string(routeIndex));
+            logger->info("Current position: (" + std::to_string(position.x) + ", " + std::to_string(position.y) + 
+                "), current block: (" + std::to_string(currentBlock.x) + ", " + std::to_string(currentBlock.y) + 
+                "), target: (" + std::to_string(target.x) + ", " + std::to_string(target.y) + 
+                "), route length: " + std::to_string(currentRoute.size()));
+        }
+
+        logger->debug("Route length: " + std::to_string(currentRoute.size()) + ", current index: " + std::to_string(routeIndex));
         sf::Vector2f nextTarget = world.getBlockCenter(currentRoute[routeIndex]);
 
         sf::Vector2f direction = nextTarget - position;
@@ -101,11 +112,12 @@ public:
 
         if (movementThisTick > distanceToTarget) {
 
-            logger->log("Overshooting target, moving directly to target and advancing route index");
+            logger->debug("Overshooting target, moving directly to target and advancing route index");
             
             position = nextTarget; // Move directly to the target if we would overshoot
             routeIndex++; // Advance to the next route point
             // updateLogic();
+            logger->info("Set position to next target: (" + std::to_string(position.x) + ", " + std::to_string(position.y) + "). Advanced route index to " + std::to_string(routeIndex));
 
         } else {
             direction /= distanceToTarget; // Normalize the direction
@@ -130,19 +142,19 @@ public:
         // For each block in range, update the world model with the current state of the block
         int observationRange = 3;
         std::vector<sf::Vector2i> blocksInRange = world.getBlocksInRange(position, observationRange);
-        logger->log("Observing " + std::to_string(blocksInRange.size()) + " blocks in range");
+        logger->debug("Observing " + std::to_string(blocksInRange.size()) + " blocks in range");
 
         for (const auto& block : blocksInRange) {
 
-            logger->log("Attempting update for block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ")");
+            logger->debug("Attempting update for block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ")");
 
             bool occupied = world.isOccupied(world.getBlockCenter(block));
 
-            logger->log("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") is " + (occupied ? "Occupied" : "Empty"));
+            logger->debug("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") is " + (occupied ? "Occupied" : "Empty"));
 
             worldModel.update(block, occupied ? BlockState::Occupied : BlockState::Empty);
 
-            logger->log("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") update complete");
+            logger->debug("Block (" + std::to_string(block.x) + ", " + std::to_string(block.y) + ") update complete");
         }
     }
 
